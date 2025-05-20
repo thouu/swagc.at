@@ -16,6 +16,7 @@ body {
     max-width: 750px;
     display: flex;
     justify-content: center;
+    cursor: pointer;
 }
 
 .swagcat-image img {
