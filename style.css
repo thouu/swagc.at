@@ -1,6 +1,19 @@
-.swagcat-image {
+body {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
+    margin: 0;
+}
+
+.swagcat-image {
+    width: 50%;
+    max-width: 750px;
+}
+
+.swagcat-image img {
+    display: block;
+    width: 100%;
+    height: auto;
+    box-shadow: 2px 2px 8px rgba(0,0,0, 0.2);
 }
