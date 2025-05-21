@@ -39,7 +39,7 @@ footer {
 
 .watermark {
     font-family: Arial;
-    font-size: 10pt;
+    font-size: 9pt;
     opacity: 25%;
     cursor: pointer;
     display: inline-block;
