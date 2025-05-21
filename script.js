@@ -3,20 +3,16 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log("DOM fully loaded and parsed");
 
     const swagcat_clickable_elements = document.querySelectorAll('.swagcat-image');
-    // We don't strictly need to get the <audio> element anymore if we create new ones,
-    // but it's good to know its src.
     const originalAudioElement = document.getElementById('iloveswagcat');
     let audioSrc = '';
 
     if (originalAudioElement) {
-        audioSrc = originalAudioElement.src; // Get the source from your existing audio tag
+        audioSrc = originalAudioElement.src;
         console.log("Audio source identified:", audioSrc);
     } else {
         console.error("Could not find the original audio element with ID 'iloveswagcat' to get the src. Please ensure it exists or hardcode the audioSrc.");
-        // Fallback or hardcode if necessary, ensure this path is correct:
-        // audioSrc = "iloveswagcat.mp3"; // Or "/iloveswagcat.mp3" or "audio/iloveswagcat.mp3"
+        // audioSrc = "iloveswagcat.mp3"; // Fallback if needed
     }
-
 
     if (swagcat_clickable_elements.length > 0 && audioSrc) {
         const swagcat_clickable_div = swagcat_clickable_elements[0];
@@ -24,10 +20,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         swagcat_clickable_div.addEventListener('click', function() {
             console.log("Div clicked! Creating and playing new audio instance.");
-
-            // Create a new Audio object each time
             const newAudio = new Audio(audioSrc);
-
             newAudio.play()
                 .then(() => {
                     console.log("I love Swagcat! :3 - New audio instance playing.");
@@ -44,6 +37,76 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (!audioSrc) {
             console.error("CRITICAL: Audio source (audioSrc) is not defined. Cannot play sound.");
+        }
+    }
+
+    // --- Tooltip Logic ---
+    const watermarkElement = document.querySelector('.watermark');
+    const reasoningElement = document.querySelector('.reasoning');
+
+    if (watermarkElement && reasoningElement) {
+        const offsetX = 6; // Pixels to the right of the cursor
+        const offsetY = 6; // Pixels below the cursor
+        const screenPadding = 5; // Min distance from screen edge
+
+        const positionTooltip = (event) => {
+            // Get tooltip dimensions. This relies on it being visible (display: block)
+            // which CSS :hover should handle before this JS runs on mouseenter/mousemove.
+            const tooltipWidth = reasoningElement.offsetWidth;
+            const tooltipHeight = reasoningElement.offsetHeight;
+
+            // Get viewport dimensions
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+
+            // Calculate initial desired position
+            let newX = event.clientX + offsetX;
+            let newY = event.clientY + offsetY;
+
+            // Adjust X position to stay within screen bounds
+            if (newX + tooltipWidth + screenPadding > viewportWidth) {
+                // If it goes off the right edge, position it to the left of the cursor
+                newX = event.clientX - tooltipWidth - offsetX;
+                // Or, alternatively, clamp it to the right edge:
+                // newX = viewportWidth - tooltipWidth - screenPadding;
+            }
+            if (newX < screenPadding) {
+                newX = screenPadding; // Prevent going off the left edge
+            }
+
+            // Adjust Y position to stay within screen bounds
+            if (newY + tooltipHeight + screenPadding > viewportHeight) {
+                // If it goes off the bottom edge, position it above the cursor
+                newY = event.clientY - tooltipHeight - offsetY;
+                // Or, alternatively, clamp it to the bottom edge:
+                // newY = viewportHeight - tooltipHeight - screenPadding;
+            }
+            if (newY < screenPadding) {
+                newY = screenPadding; // Prevent going off the top edge
+            }
+
+            reasoningElement.style.left = newX + 'px';
+            reasoningElement.style.top = newY + 'px';
+        };
+
+        watermarkElement.addEventListener('mouseenter', function(event) {
+            // CSS :hover makes it display: block. Position it.
+            positionTooltip(event);
+        });
+
+        watermarkElement.addEventListener('mousemove', function(event) {
+            positionTooltip(event);
+        });
+
+        // Hiding is still handled by CSS when mouse leaves .watermark
+        console.log("Tooltip follow-mouse logic attached.");
+
+    } else {
+        if (!watermarkElement) {
+            console.error("Tooltip JS: Could not find .watermark element.");
+        }
+        if (!reasoningElement) {
+            console.error("Tooltip JS: Could not find .reasoning element.");
         }
     }
 });

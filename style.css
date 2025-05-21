@@ -28,3 +28,42 @@ body {
     box-shadow: 2px 2px 8px rgba(0,0,0, 0.2);
     background-color: black;
 }
+
+footer {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    text-align: center;
+    padding: 5px 0;
+}
+
+.watermark {
+    font-family: Arial;
+    font-size: 10pt;
+    opacity: 25%;
+    cursor: pointer;
+    display: inline-block;
+}
+
+.watermark a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.watermark:hover + .reasoning {
+    display: block;
+}
+
+.reasoning {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 2px 2px 8px rgba(0,0,0, 0.2);
+}
+
+.reasoning img {
+    max-width: 800px;
+    height: auto;
+    display: block;
+}
