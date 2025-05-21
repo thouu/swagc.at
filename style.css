@@ -50,8 +50,11 @@ footer {
     text-decoration: none;
 }
 
-.watermark:hover + .reasoning {
+/* make hover functionality only work on desktop */
+@media (hover: hover) and (pointer: fine) {
+  .watermark:hover + .reasoning {
     display: block;
+  }
 }
 
 .reasoning {
