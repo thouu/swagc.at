@@ -23,114 +23,352 @@
 |  _| | |  __/
 |_| |_|_|\___|
 */
-document.addEventListener('DOMContentLoaded', function() {
-    console.log("DOM fully loaded and parsed");
+(() => {
+    'use strict';
 
-    const swagcat_clickable_elements = document.querySelectorAll('.swagcat-image');
-    const originalAudioElement = document.getElementById('iloveswagcat');
-    let audioSrc = '';
+    const MAX_CONCURRENT_SOUNDS = 8;
+    const TOOLTIP_OFFSET = 8;
+    const VIEWPORT_PADDING = 8;
+    const FINE_POINTER_QUERY = '(hover: hover) and (pointer: fine)';
 
-    if (originalAudioElement) {
-        audioSrc = originalAudioElement.src;
-        console.log("Audio source identified:", audioSrc);
-    } else {
-        console.error("Could not find the original audio element with ID 'iloveswagcat' to get the src. Please ensure it exists or hardcode the audioSrc.");
-        // audioSrc = "iloveswagcat.mp3"; // Fallback if needed
-    }
-
-    if (swagcat_clickable_elements.length > 0 && audioSrc) {
-        const swagcat_clickable_div = swagcat_clickable_elements[0];
-        console.log("Using this div for click:", swagcat_clickable_div);
-
-        swagcat_clickable_div.addEventListener('click', function() {
-            console.log("Div clicked! Creating and playing new audio instance.");
-            const newAudio = new Audio(audioSrc);
-            newAudio.play()
-                .then(() => {
-                    console.log("I love Swagcat! :3 - New audio instance playing.");
-                })
-                .catch(error => {
-                    console.error("Error playing new audio instance:", error);
-                    console.log("Source used for this instance:", audioSrc);
-                });
-        });
-        console.log("Event listener attached for overlapping audio playback.");
-    } else {
-        if (swagcat_clickable_elements.length === 0) {
-            console.error("CRITICAL: No element with class 'swagcat-image' found.");
+    const runWhenReady = (callback) => {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', callback, { once: true });
+            return;
         }
-        if (!audioSrc) {
-            console.error("CRITICAL: Audio source (audioSrc) is not defined. Cannot play sound.");
+
+        callback();
+    };
+
+    const setupSwagcatAudio = () => {
+        const sourceAudio = document.getElementById('iloveswagcat');
+        const triggers = document.querySelectorAll('.swagcat-image');
+
+        if (!(sourceAudio instanceof HTMLAudioElement) || triggers.length === 0) {
+            return;
         }
-    }
 
-    // --- Tooltip Logic ---
-    const watermarkElement = document.querySelector('.watermark');
-    const reasoningElement = document.querySelector('.reasoning');
+        const hasSource = sourceAudio.currentSrc
+            || sourceAudio.getAttribute('src')
+            || sourceAudio.querySelector('source[src]');
 
-    if (watermarkElement && reasoningElement) {
-        const offsetX = 6; // Pixels to the right of the cursor
-        const offsetY = 6; // Pixels below the cursor
-        const screenPadding = 5; // Min distance from screen edge
+        if (!hasSource) {
+            return;
+        }
 
-        const positionTooltip = (event) => {
-            // Get tooltip dimensions. This relies on it being visible (display: block)
-            // which CSS :hover should handle before this JS runs on mouseenter/mousemove.
-            const tooltipWidth = reasoningElement.offsetWidth;
-            const tooltipHeight = reasoningElement.offsetHeight;
+        const activeSounds = new Set();
+        sourceAudio.preload = 'auto';
 
-            // Get viewport dimensions
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-
-            // Calculate initial desired position
-            let newX = event.clientX + offsetX;
-            let newY = event.clientY + offsetY;
-
-            // Adjust X position to stay within screen bounds
-            if (newX + tooltipWidth + screenPadding > viewportWidth) {
-                // If it goes off the right edge, position it to the left of the cursor
-                newX = event.clientX - tooltipWidth - offsetX;
-                // Or, alternatively, clamp it to the right edge:
-                // newX = viewportWidth - tooltipWidth - screenPadding;
-            }
-            if (newX < screenPadding) {
-                newX = screenPadding; // Prevent going off the left edge
+        const stopSound = (sound) => {
+            if (!activeSounds.delete(sound)) {
+                return;
             }
 
-            // Adjust Y position to stay within screen bounds
-            if (newY + tooltipHeight + screenPadding > viewportHeight) {
-                // If it goes off the bottom edge, position it above the cursor
-                newY = event.clientY - tooltipHeight - offsetY;
-                // Or, alternatively, clamp it to the bottom edge:
-                // newY = viewportHeight - tooltipHeight - screenPadding;
-            }
-            if (newY < screenPadding) {
-                newY = screenPadding; // Prevent going off the top edge
-            }
-
-            reasoningElement.style.left = newX + 'px';
-            reasoningElement.style.top = newY + 'px';
+            sound.pause();
+            sound.removeAttribute('src');
+            sound.querySelectorAll('source').forEach((source) => {
+                source.removeAttribute('src');
+            });
+            sound.load();
         };
 
-        watermarkElement.addEventListener('mouseenter', function(event) {
-            // CSS :hover makes it display: block. Position it.
-            positionTooltip(event);
+        const playSound = () => {
+            if (activeSounds.size >= MAX_CONCURRENT_SOUNDS) {
+                stopSound(activeSounds.values().next().value);
+            }
+
+            const sound = sourceAudio.cloneNode(true);
+            let errorReported = false;
+
+            sound.removeAttribute('id');
+            sound.preload = 'auto';
+            activeSounds.add(sound);
+
+            const reportError = (error) => {
+                if (errorReported || error?.name === 'AbortError') {
+                    return;
+                }
+
+                errorReported = true;
+                console.warn('Unable to play the Swagcat sound.', error);
+            };
+
+            sound.addEventListener('ended', () => {
+                activeSounds.delete(sound);
+            }, { once: true });
+
+            sound.addEventListener('error', () => {
+                activeSounds.delete(sound);
+                reportError(sound.error);
+            }, { once: true });
+
+            try {
+                const playback = sound.play();
+
+                playback?.catch((error) => {
+                    const wasActive = activeSounds.delete(sound);
+
+                    if (wasActive) {
+                        reportError(error);
+                    }
+                });
+            } catch (error) {
+                activeSounds.delete(sound);
+                reportError(error);
+            }
+        };
+
+        triggers.forEach((trigger) => {
+            const isNativelyInteractive = trigger.matches(
+                'a[href], button, input:not([type="hidden"]), select, textarea, summary'
+            );
+
+            if (!trigger.hasAttribute('aria-label')
+                && !trigger.hasAttribute('aria-labelledby')) {
+                trigger.setAttribute('aria-label', 'Play the Swagcat sound');
+            }
+
+            if (!isNativelyInteractive) {
+                if (!trigger.hasAttribute('role')) {
+                    trigger.setAttribute('role', 'button');
+                }
+                if (!trigger.hasAttribute('tabindex')) {
+                    trigger.tabIndex = 0;
+                }
+
+                trigger.addEventListener('keydown', (event) => {
+                    const isActivationKey = event.key === 'Enter' || event.key === ' ';
+
+                    if (!isActivationKey || event.repeat || event.target !== trigger) {
+                        return;
+                    }
+
+                    event.preventDefault();
+                    playSound();
+                });
+            }
+
+            trigger.addEventListener('click', playSound);
         });
 
-        watermarkElement.addEventListener('mousemove', function(event) {
-            positionTooltip(event);
+        window.addEventListener('pagehide', () => {
+            [...activeSounds].forEach(stopSound);
+        });
+    };
+
+    const setupReasoningTooltip = () => {
+        const watermark = document.querySelector('.watermark');
+        const tooltip = document.querySelector('.reasoning');
+
+        if (!watermark || !tooltip) {
+            return;
+        }
+
+        const descriptionTarget = watermark.querySelector('a, button') || watermark;
+        const tooltipImage = tooltip.querySelector('img');
+        const hoverMedia = window.matchMedia(FINE_POINTER_QUERY);
+        const configuredImageMaxWidth = tooltipImage
+            ? window.getComputedStyle(tooltipImage).maxWidth
+            : '';
+        const imageMaxWidth = configuredImageMaxWidth.endsWith('px')
+            ? Number.parseFloat(configuredImageMaxWidth)
+            : Number.POSITIVE_INFINITY;
+
+        if (!tooltip.id) {
+            let tooltipId = 'watermark-reasoning';
+            let suffix = 2;
+
+            while (document.getElementById(tooltipId)) {
+                tooltipId = `watermark-reasoning-${suffix}`;
+                suffix += 1;
+            }
+
+            tooltip.id = tooltipId;
+        }
+
+        if (!tooltip.hasAttribute('role')) {
+            tooltip.setAttribute('role', 'tooltip');
+        }
+
+        const descriptionIds = new Set(
+            (descriptionTarget.getAttribute('aria-describedby') || '')
+                .split(/\s+/)
+                .filter(Boolean)
+        );
+        descriptionIds.add(tooltip.id);
+        descriptionTarget.setAttribute('aria-describedby', [...descriptionIds].join(' '));
+
+        let animationFrame = 0;
+        let hasFocus = false;
+        let isHovering = false;
+        let pointerPosition = null;
+
+        const getViewport = () => {
+            const visualViewport = window.visualViewport;
+
+            return {
+                height: visualViewport?.height || window.innerHeight,
+                left: visualViewport?.offsetLeft || 0,
+                top: visualViewport?.offsetTop || 0,
+                width: visualViewport?.width || window.innerWidth
+            };
+        };
+
+        const clamp = (value, minimum, maximum) => (
+            Math.min(Math.max(value, minimum), Math.max(minimum, maximum))
+        );
+
+        const constrainImage = () => {
+            if (!tooltipImage) {
+                return;
+            }
+
+            const viewport = getViewport();
+            const availableWidth = Math.max(1, viewport.width - (VIEWPORT_PADDING * 2));
+            const availableHeight = Math.max(1, viewport.height - (VIEWPORT_PADDING * 2));
+
+            tooltipImage.style.maxWidth = `${Math.min(imageMaxWidth, availableWidth)}px`;
+            tooltipImage.style.maxHeight = `${availableHeight}px`;
+            tooltipImage.style.objectFit = 'contain';
+        };
+
+        const setPosition = (left, top, tooltipBounds) => {
+            const viewport = getViewport();
+            const minimumLeft = viewport.left + VIEWPORT_PADDING;
+            const minimumTop = viewport.top + VIEWPORT_PADDING;
+            const maximumLeft = viewport.left + viewport.width
+                - tooltipBounds.width - VIEWPORT_PADDING;
+            const maximumTop = viewport.top + viewport.height
+                - tooltipBounds.height - VIEWPORT_PADDING;
+
+            tooltip.style.left = `${Math.round(clamp(left, minimumLeft, maximumLeft))}px`;
+            tooltip.style.top = `${Math.round(clamp(top, minimumTop, maximumTop))}px`;
+        };
+
+        const positionTooltip = () => {
+            const tooltipBounds = tooltip.getBoundingClientRect();
+
+            if (isHovering && pointerPosition) {
+                const viewport = getViewport();
+                let left = pointerPosition.x + TOOLTIP_OFFSET;
+                let top = pointerPosition.y + TOOLTIP_OFFSET;
+
+                if (left + tooltipBounds.width + VIEWPORT_PADDING
+                    > viewport.left + viewport.width) {
+                    left = pointerPosition.x - tooltipBounds.width - TOOLTIP_OFFSET;
+                }
+                if (top + tooltipBounds.height + VIEWPORT_PADDING
+                    > viewport.top + viewport.height) {
+                    top = pointerPosition.y - tooltipBounds.height - TOOLTIP_OFFSET;
+                }
+
+                setPosition(left, top, tooltipBounds);
+                return;
+            }
+
+            const watermarkBounds = watermark.getBoundingClientRect();
+            const centeredLeft = watermarkBounds.left
+                + ((watermarkBounds.width - tooltipBounds.width) / 2);
+            let top = watermarkBounds.top - tooltipBounds.height - TOOLTIP_OFFSET;
+
+            if (top < getViewport().top + VIEWPORT_PADDING) {
+                top = watermarkBounds.bottom + TOOLTIP_OFFSET;
+            }
+
+            setPosition(centeredLeft, top, tooltipBounds);
+        };
+
+        const schedulePosition = () => {
+            if (animationFrame || (!hasFocus && !isHovering)) {
+                return;
+            }
+
+            animationFrame = window.requestAnimationFrame(() => {
+                animationFrame = 0;
+                positionTooltip();
+            });
+        };
+
+        const updateVisibility = () => {
+            if (hasFocus || isHovering) {
+                tooltip.style.display = 'block';
+                constrainImage();
+                schedulePosition();
+                return;
+            }
+
+            tooltip.style.removeProperty('display');
+
+            if (animationFrame) {
+                window.cancelAnimationFrame(animationFrame);
+                animationFrame = 0;
+            }
+        };
+
+        watermark.addEventListener('pointerenter', (event) => {
+            if (!hoverMedia.matches) {
+                return;
+            }
+
+            isHovering = true;
+            pointerPosition = { x: event.clientX, y: event.clientY };
+            updateVisibility();
         });
 
-        // Hiding is still handled by CSS when mouse leaves .watermark
-        console.log("Tooltip follow-mouse logic attached.");
+        watermark.addEventListener('pointermove', (event) => {
+            if (!isHovering) {
+                return;
+            }
 
-    } else {
-        if (!watermarkElement) {
-            console.error("Tooltip JS: Could not find .watermark element.");
-        }
-        if (!reasoningElement) {
-            console.error("Tooltip JS: Could not find .reasoning element.");
-        }
-    }
-});
+            pointerPosition = { x: event.clientX, y: event.clientY };
+            schedulePosition();
+        }, { passive: true });
+
+        watermark.addEventListener('pointerleave', () => {
+            isHovering = false;
+            pointerPosition = null;
+            updateVisibility();
+        });
+
+        watermark.addEventListener('focusin', () => {
+            hasFocus = true;
+            updateVisibility();
+        });
+
+        watermark.addEventListener('focusout', (event) => {
+            if (event.relatedTarget && watermark.contains(event.relatedTarget)) {
+                return;
+            }
+
+            hasFocus = false;
+            updateVisibility();
+        });
+
+        const handleViewportChange = () => {
+            constrainImage();
+            schedulePosition();
+        };
+
+        window.addEventListener('resize', handleViewportChange, { passive: true });
+        window.visualViewport?.addEventListener(
+            'resize',
+            handleViewportChange,
+            { passive: true }
+        );
+        tooltipImage?.addEventListener('load', schedulePosition);
+        hoverMedia.addEventListener('change', (event) => {
+            if (event.matches) {
+                return;
+            }
+
+            isHovering = false;
+            pointerPosition = null;
+            updateVisibility();
+        });
+    };
+
+    runWhenReady(() => {
+        setupSwagcatAudio();
+        setupReasoningTooltip();
+    });
+})();
